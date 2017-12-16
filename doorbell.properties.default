@@ -1,0 +1,11 @@
+# Pusher Settings
+app_id=
+key=
+secret=
+cluster=us2
+# Doorbell GPS Service
+event=my-event
+channel=my-channel
+
+# Command to unlock the door
+command=/home/pi/Development/doorbell-listener/unlock.py

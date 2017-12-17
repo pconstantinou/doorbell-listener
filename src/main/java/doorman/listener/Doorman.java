@@ -2,6 +2,7 @@ package doorman.listener;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Date;
 import java.util.Properties;
@@ -20,45 +21,25 @@ public class Doorman {
 			System.out.println("Usage: java Doorman <pusher properties file> <password properties file>");
 			System.exit(-1);
 		}
-		Properties props = new Properties();
-		File propFile = new File(args[0]);
-		System.out.println("Using " + propFile);
-		if (!propFile.exists()) {
-			System.out.println("Properties don't exist");
-			System.exit(-1);
-		} else {
-			props.load(new FileInputStream(propFile));
-			props.list(System.out);
-		}
-
+		// Load Passwords
 		final Properties passwords = new Properties();
 		final File passwordsFile = new File(args[1]);
 		if (!passwordsFile.isFile() && passwordsFile.canRead()) {
 			System.err.println("Bad password file: " + passwordsFile);
 			System.exit(-1);
-		}
-
-		passwords.load(new FileInputStream(passwordsFile));
-
-		String appId = props.getProperty("app_id");
-		if (appId == null) {
-			System.err.println("No secret provided");
 		} else {
-			System.out.println("Using App Id: " + appId);
+			passwords.load(new FileInputStream(passwordsFile));
 		}
-		String key = props.getProperty("key");
-		String secret = props.getProperty("secret");
-		if (secret == null) {
-			System.err.println("No secret provided");
-		}
-		String cluster = props.getProperty("cluster", "us2");
+		// Set up pusher
+		File propFile = new File(args[0]);
+		Properties props = getPusherProperties(propFile);
+
+		Pusher pusher = getPusherFromProperties(props);
 		String channelName = props.getProperty("channel", "my-channel");
 		String eventName = props.getProperty("event", "my-event");
+
 		final String command = props.getProperty("command");
 
-		PusherOptions options = new PusherOptions();
-		options.setCluster(cluster);
-		Pusher pusher = new Pusher(key, options);
 		Channel channel = pusher.subscribe(channelName);
 
 		channel.bind(eventName, new SubscriptionEventListener() {
@@ -91,5 +72,42 @@ public class Doorman {
 			System.out.println("sleeping");
 
 		}
+	}
+
+	public static Properties getPusherProperties(File propFile) throws IOException, FileNotFoundException {
+		Properties props = new Properties();
+		System.out.println("Using " + propFile);
+		if (!propFile.exists()) {
+			System.out.println("Properties don't exist");
+			System.exit(-1);
+		} else {
+			props.load(new FileInputStream(propFile));
+			props.list(System.out);
+		}
+		return props;
+	}
+
+	public static Pusher getPusherFromProperties(Properties pusherProperties) {
+		String appId = pusherProperties.getProperty("app_id");
+		if (appId == null) {
+			System.err.println("No app id provided");
+		} else {
+			System.out.println("Using App Id: " + appId);
+		}
+		String key = pusherProperties.getProperty("key");
+		if (key == null) {
+			System.err.println("No pusher key provided");
+			System.exit(-1);
+		}
+		String secret = pusherProperties.getProperty("secret");
+		if (secret == null) {
+			System.err.println("No secret provided");
+		}
+		String cluster = pusherProperties.getProperty("cluster", "us2");
+
+		PusherOptions options = new PusherOptions();
+		options.setCluster(cluster);
+		Pusher pusher = new Pusher(key, options);
+		return pusher;
 	}
 }

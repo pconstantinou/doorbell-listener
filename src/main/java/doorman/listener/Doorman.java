@@ -3,6 +3,7 @@ package doorman.listener;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Properties;
+import java.io.File;
 
 import com.pusher.client.Pusher;
 import com.pusher.client.PusherOptions;
@@ -12,17 +13,23 @@ import com.pusher.client.channel.SubscriptionEventListener;
 public class Doorman {
 
 	public static void main(String[] args) throws Exception {
-
 		Properties props = new Properties();
-		props.load(new FileInputStream(args[1]));
-
+		File propFile = new File(args[0]);
+		System.out.println("Using " + propFile);
+		if (!propFile.exists()) {
+		    System.out.println("Properties don't exist");
+		} else {
+		    props.load(new FileInputStream(propFile));
+		    props.list(System.out);
+		}
+	    
 		String appId = props.getProperty("app_id");
 		if (appId == null) {
 			System.err.println("No secret provided");
 		} else {
 			System.out.println("Using App Id: " + appId);
 		}
-		String key = props.getProperty("app_key");
+		String key = props.getProperty("key");
 		String secret = props.getProperty("secret");
 		if (secret == null) {
 			System.err.println("No secret provided");

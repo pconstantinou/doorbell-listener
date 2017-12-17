@@ -5,7 +5,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Date;
 import java.util.Properties;
-import java.io.File;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -17,6 +16,10 @@ import com.pusher.client.channel.SubscriptionEventListener;
 public class Doorman {
 
 	public static void main(String[] args) throws Exception {
+		if (args.length != 2) {
+			System.out.println("Usage: java Doorman <pusher properties file> <password properties file>");
+			System.exit(-1);
+		}
 		Properties props = new Properties();
 		File propFile = new File(args[0]);
 		System.out.println("Using " + propFile);

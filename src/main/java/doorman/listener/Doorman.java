@@ -3,7 +3,9 @@ package doorman.listener;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.Date;
 import java.util.Properties;
 
@@ -29,11 +31,13 @@ public class Doorman implements SubscriptionEventListener {
 
 	final private Properties passwords = new Properties();
 	final private File passwordsFile;
+	final private PrintWriter accessLog;
 	private String command;
 	private Pusher pusher;
 
-	public Doorman(File pusherPropertiesFile, File passwordsFile) throws IOException {
+	public Doorman(File pusherPropertiesFile, File passwordsFile, File accessLogFile) throws IOException {
 
+		accessLog = new PrintWriter(new FileWriter(accessLogFile));
 		// Load Passwords
 		this.passwordsFile = passwordsFile;
 		if (!reloadPasswordFile()) {
@@ -55,12 +59,25 @@ public class Doorman implements SubscriptionEventListener {
 		pusher.connect();
 	}
 
+	/***
+	 * 
+	 * @param args
+	 *            <pusher properties file> <password file> [<access log file>]
+	 * @throws Exception
+	 */
 	public static void main(String[] args) throws Exception {
-		if (args.length != 2) {
-			System.out.println("Usage: java Doorman <pusher properties file> <password properties file>");
+		if (args.length < 2) {
+			System.out.println(
+					"Usage: java Doorman <pusher properties file> <password properties file> [<access log file>]");
 			System.exit(-1);
 		}
-		Doorman doorman = new Doorman(new File(args[0]), new File(args[1]));
+		File accessLogFile;
+		if (args.length >= 3) {
+			accessLogFile = new File(args[2]);
+		} else {
+			accessLogFile = new File("access." + System.currentTimeMillis() + ".log");
+		}
+		Doorman doorman = new Doorman(new File(args[0]), new File(args[1]), accessLogFile);
 		doorman.start();
 
 		for (int i = 0; true; i++) {
@@ -72,20 +89,33 @@ public class Doorman implements SubscriptionEventListener {
 		}
 	}
 
+	/**
+	 * Pusher Event Handler invoked when an event is triggered on the channel
+	 */
 	public void onEvent(String channelName, String eventName, final String data) {
 		reloadPasswordFile();
 		String passcode = getPasscodeFromData(data);
 		String user = passwords.getProperty(passcode);
 		if (user != null) {
 			try {
+				accessLog.println(new Date() + ";" + "Success;" + user);
 				System.out.println(new Date() + ": Executing:" + command + " for " + user);
 				Runtime.getRuntime().exec(command);
 			} catch (Throwable e) {
 				e.printStackTrace();
 			}
+		} else {
+			accessLog.println(new Date() + ";" + "Failed;" + passcode);
 		}
+		accessLog.flush();
 	}
 
+	/**
+	 * Parse JSON from Pusher
+	 * 
+	 * @param data
+	 * @return the message attribute of the data
+	 */
 	public String getPasscodeFromData(final String data) {
 		System.out.println("Data:" + data);
 		JsonElement element = new JsonParser().parse(data);

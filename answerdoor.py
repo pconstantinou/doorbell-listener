@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import pifacerelayplus
 import time
 

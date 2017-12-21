@@ -110,6 +110,7 @@ public class Doorman implements SubscriptionEventListener {
 					accessLog.println(new Date() + ";" + "Success;" + user);
 					System.out.println(new Date() + ": Executing:" + command + " for " + user);
 					Runtime.getRuntime().exec(command);
+					Thread.sleep(1000);
 				} catch (Throwable e) {
 					e.printStackTrace();
 				}

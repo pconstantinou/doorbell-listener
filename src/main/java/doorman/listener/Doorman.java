@@ -34,6 +34,7 @@ public class Doorman implements SubscriptionEventListener {
 	final private PrintWriter accessLog;
 	private String command;
 	private Pusher pusher;
+	private boolean handlingEvent = false;
 
 	public Doorman(File pusherPropertiesFile, File passwordsFile, File accessLogFile) throws IOException {
 
@@ -93,21 +94,34 @@ public class Doorman implements SubscriptionEventListener {
 	 * Pusher Event Handler invoked when an event is triggered on the channel
 	 */
 	public void onEvent(String channelName, String eventName, final String data) {
+
 		reloadPasswordFile();
 		String passcode = getPasscodeFromData(data);
 		String user = passwords.getProperty(passcode);
-		if (user != null) {
-			try {
-				accessLog.println(new Date() + ";" + "Success;" + user);
-				System.out.println(new Date() + ": Executing:" + command + " for " + user);
-				Runtime.getRuntime().exec(command);
-			} catch (Throwable e) {
-				e.printStackTrace();
+		synchronized (this) {
+			if (handlingEvent) {
+				return;
 			}
-		} else {
-			accessLog.println(new Date() + ";" + "Failed;" + passcode);
+			handlingEvent = true;
 		}
-		accessLog.flush();
+		try {
+			if (user != null) {
+				try {
+					accessLog.println(new Date() + ";" + "Success;" + user);
+					System.out.println(new Date() + ": Executing:" + command + " for " + user);
+					Runtime.getRuntime().exec(command);
+				} catch (Throwable e) {
+					e.printStackTrace();
+				}
+			} else {
+				accessLog.println(new Date() + ";" + "Failed;" + passcode);
+			}
+			accessLog.flush();
+		} finally {
+			synchronized (this) {
+				handlingEvent = false;
+			}
+		}
 	}
 
 	/**

@@ -7,7 +7,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -35,6 +38,41 @@ public class Doorman implements SubscriptionEventListener {
 	private String command;
 	private Pusher pusher;
 	private boolean handlingEvent = false;
+	private Map<String, FailureScore> failureScoreboard = new HashMap<String, FailureScore>();
+	final static long EXPIRE_FAILURE_AGE = TimeUnit.HOURS.toMillis(8);
+	final static long BLOCK_FAILURE_AGE = TimeUnit.HOURS.toMillis(1);
+	final static long BLOCK_AFTER_FAILURE_COUNT = 10;
+
+	static class FailureScore {
+		long count = 0;
+		long leastRecentFailure = System.currentTimeMillis();
+		long mostRecentFailure = System.currentTimeMillis();
+
+		long getAge() {
+			return (System.currentTimeMillis() - mostRecentFailure);
+		}
+
+		boolean isExpired() {
+			return getAge() > EXPIRE_FAILURE_AGE && !isBlocked();
+		}
+
+		boolean isBlocked() {
+			return (mostRecentFailure > System.currentTimeMillis() - BLOCK_FAILURE_AGE)
+					&& count > BLOCK_AFTER_FAILURE_COUNT;
+		}
+
+		void incrementFailure() {
+			mostRecentFailure = System.currentTimeMillis();
+			count = Math.min(count + 1, Integer.MAX_VALUE);
+		}
+
+		@Override
+		public String toString() {
+			return "FailureScore [count=" + count + ", leastRecentFailure=" + new Date(leastRecentFailure)
+					+ ", mostRecentFailure=" + new Date(mostRecentFailure) + "]";
+		}
+
+	}
 
 	public Doorman(File pusherPropertiesFile, File passwordsFile, File accessLogFile) throws IOException {
 
@@ -90,14 +128,40 @@ public class Doorman implements SubscriptionEventListener {
 		}
 	}
 
+	public boolean shouldBlockDueToTooManyFailures(boolean isValidLogin, String ipString) {
+		FailureScore failureScore = failureScoreboard.get(ipString);
+		if (failureScore != null) {
+			if (!isValidLogin) {
+				failureScore.incrementFailure();
+				return true;
+			} else if (failureScore.isExpired()) {
+				failureScoreboard.remove(ipString);
+			}
+			return failureScore.isBlocked();
+		} else if (failureScore == null && !isValidLogin) {
+			failureScoreboard.put(ipString, new FailureScore());
+			return true;
+		}
+		// Don't block valid logs without a failure
+		return false;
+	}
+
 	/**
 	 * Pusher Event Handler invoked when an event is triggered on the channel
 	 */
 	public void onEvent(String channelName, String eventName, final String data) {
-
 		reloadPasswordFile();
 		String passcode = getPasscodeFromData(data);
+		String ipString = getIPFromData(data);
 		String user = passwords.getProperty(passcode);
+		if (ipString != null) {
+			if (shouldBlockDueToTooManyFailures(user != null, ipString)) {
+				accessLog.printf("Blocked user=%s %s with %s\n", user, ipString,
+						failureScoreboard.get(ipString).toString());
+				return;
+			}
+		}
+
 		synchronized (this) {
 			if (handlingEvent) {
 				return;
@@ -109,7 +173,8 @@ public class Doorman implements SubscriptionEventListener {
 				try {
 					accessLog.println(new Date() + ";" + "Success;" + user);
 					System.out.println(new Date() + ": Executing:" + command + " for " + user);
-					Runtime.getRuntime().exec(command);
+					Process p = Runtime.getRuntime().exec(command);
+					p.exitValue();
 					Thread.sleep(1000);
 				} catch (Throwable e) {
 					e.printStackTrace();
@@ -136,6 +201,16 @@ public class Doorman implements SubscriptionEventListener {
 		JsonElement element = new JsonParser().parse(data);
 		String message = element.getAsJsonObject().get("message").getAsString();
 		return message;
+	}
+
+	public String getIPFromData(final String data) {
+		try {
+			JsonElement element = new JsonParser().parse(data);
+			String ipString = element.getAsJsonObject().get("ip").getAsString();
+			return ipString;
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	public boolean reloadPasswordFile() {

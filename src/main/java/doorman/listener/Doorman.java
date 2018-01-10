@@ -130,7 +130,9 @@ public class Doorman implements SubscriptionEventListener {
 
 	public boolean shouldBlockDueToTooManyFailures(boolean isValidLogin, String ipString) {
 		FailureScore failureScore = failureScoreboard.get(ipString);
+		System.out.println("Checking IP " + ipString);
 		if (failureScore != null) {
+		    System.out.println("Existing failure found for IP " + failureScore);
 			if (!isValidLogin) {
 				failureScore.incrementFailure();
 				return true;
@@ -139,7 +141,10 @@ public class Doorman implements SubscriptionEventListener {
 			}
 			return failureScore.isBlocked();
 		} else if (failureScore == null && !isValidLogin) {
-			failureScoreboard.put(ipString, new FailureScore());
+		        failureScore = new FailureScore();
+			failureScore.incrementFailure();
+			failureScoreboard.put(ipString, failureScore);
+			System.out.println("Adding a new failure score for IP: " + ipString);
 			return true;
 		}
 		// Don't block valid logs without a failure
@@ -158,6 +163,7 @@ public class Doorman implements SubscriptionEventListener {
 			if (shouldBlockDueToTooManyFailures(user != null, ipString)) {
 				accessLog.printf("Blocked user=%s %s with %s\n", user, ipString,
 						failureScoreboard.get(ipString).toString());
+				accessLog.flush();
 				return;
 			}
 		}
@@ -187,6 +193,7 @@ public class Doorman implements SubscriptionEventListener {
 			synchronized (this) {
 				handlingEvent = false;
 			}
+			accessLog.flush();
 		}
 	}
 

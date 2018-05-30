@@ -18,7 +18,7 @@ import com.pusher.client.Pusher;
 import com.pusher.client.PusherOptions;
 import com.pusher.client.channel.Channel;
 import com.pusher.client.channel.SubscriptionEventListener;
-
+import com.pusher.client.connection.*;
 /**
  * Doorman is an executable that listens for messages from the pusher service
  * and if the passcode matches one of the provided passwords, it will execute a
@@ -30,7 +30,7 @@ import com.pusher.client.channel.SubscriptionEventListener;
  * @author phil
  *
  */
-public class Doorman implements SubscriptionEventListener {
+public class Doorman implements SubscriptionEventListener, ConnectionEventListener {
 
 	final private Properties passwords = new Properties();
 	final private File passwordsFile;
@@ -98,6 +98,19 @@ public class Doorman implements SubscriptionEventListener {
 		pusher.connect();
 	}
 
+        @Override
+	public void onConnectionStateChange(ConnectionStateChange change) {
+	    System.out.println("State changed to " + change.getCurrentState() +
+			       " from " + change.getPreviousState());
+	}
+
+        @Override
+	public void onError(String message, String code, Exception e) {
+	    System.out.println("There was a problem connecting!");
+	}
+    
+    
+
 	/***
 	 * 
 	 * @param args
@@ -120,10 +133,14 @@ public class Doorman implements SubscriptionEventListener {
 		doorman.start();
 
 		for (int i = 0; true; i++) {
-			Thread.sleep(1000);
-			System.out.print(".");
-			if (i % 60 == 0 && i != 0) {
+			Thread.sleep(1000*60);
+			if (false) {
+
+			    // Verbose logging  / feedback
+			    System.out.print(".");
+			    if (i % 60 == 0 && i != 0) {
 				System.out.println();
+			    }
 			}
 		}
 	}
@@ -184,6 +201,7 @@ public class Doorman implements SubscriptionEventListener {
 					p.waitFor();
 					p.exitValue();
 					Thread.sleep(1000);
+					p.destroy();
 				} catch (Throwable e) {
 					e.printStackTrace();
 				}
